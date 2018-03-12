@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        function copyText(){
+        document.getElementById("field2").value=document.getElementById("field1").value;
+        }
+    </script>
+    <meta charset="UTF-8">
+    <title>test</title>
+</head>
+<body>
+    <h1>my html</h1>
+
+    Field1: <input type="text" id="field1" value="Hello World!"><br>
+    Field2: <input type="text" id="field2"><br><br>
+    <button type="button" onclick="copyText()">Click Me!</button>
+</body>
+</html>
