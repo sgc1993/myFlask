@@ -12,12 +12,11 @@ def init():
 
 def get_unaliased_enterprise_id_list():
     """
-    获得所有对齐位为0的企业id_list
+    获得所有对齐位和人工对齐位为0的企业id_list
     如果没有，返回空list
     :return: id_list
     """
-    #mssql = MSSQL_ODBC('localhost', 'STIMSTEST', 'sa', '1q2w3e4r5t!')
-    result_list = mssql.ExecQuery("select id from EnterpriseInfo where aliased = 0")
+    result_list = mssql.ExecQuery("select id from EnterpriseInfo where aliased = 0 and manmade = 0")
     if len(result_list) == 0:
         return []
     id_list = []
@@ -98,7 +97,7 @@ def push_enterprise_list_into_alisa_table_new_alias(enterprise_id_list):
     if len(result) == 0: return
     aliasname = result[0][0]
     aliasname = aliasname.replace("'", "''")
-    aliasid = get_new_aliasid()
+    aliasid = get_new_aliasid("aliasCompany")
     for enterprise_id in enterprise_id_list:
         enterprise_name = mssql.ExecQuery("select name from EnterpriseInfo WHERE id = %d" % enterprise_id)[0][0]
         enterprise_name = enterprise_name.replace("'", "''")
@@ -107,12 +106,12 @@ def push_enterprise_list_into_alisa_table_new_alias(enterprise_id_list):
         aliasname, enterprise_id, aliasid, enterprise_name, nowTime))
         mssql.ExecNonQuery("update EnterpriseInfo set aliased = 1 where id = %d" % enterprise_id)
 
-def get_new_aliasid():
+def get_new_aliasid(table_name):
     """
     获取新的对齐块块号，即找出所有块号排序，最大值+1
     :return:
     """
-    result_list = mssql.ExecQuery("select aliasid from aliasCompany")
+    result_list = mssql.ExecQuery("select aliasid from %s"%table_name)
     if len(result_list) == 0:return 1
     id_set = set()
     for result in result_list:
@@ -121,34 +120,41 @@ def get_new_aliasid():
     id_list.sort()
     return id_list[len(id_list)-1]+1
 
-def match_enterprise():
+def machine_match_enterprise():
     init()
     #获取未匹配机构id列表
     unaliased_enterprise_id_list = get_unaliased_enterprise_id_list()
     #对于每一个待匹配机构id
     for unaliased_enterprise_id in unaliased_enterprise_id_list:
         print(unaliased_enterprise_id)
-        #获取该机构信息，实体化
-        unaliased_enterprise = get_enterprise_entity_by_enterpriseId(unaliased_enterprise_id)
-        # 加一个判断，有可能循环后期有的机构已经被对齐了
-        if unaliased_enterprise.aliased == 1:continue
-        #获取与该机构同分块的机构id列表
-        enterprise_id_list_of_same_block = get_id_list_of_same_block(unaliased_enterprise)
-        alias_id_list = []#用于存放对齐的企业id
-        alias_id_list.append(unaliased_enterprise.id)
-        find_alias_id = False#标识匹配完后是否需要建立新的对齐区
-        # 对该待对齐机构和其分块中的机构逐一进行匹配
-        for enterprise_id_of_same_block in enterprise_id_list_of_same_block:
-            to_match_enterprise_in_same_block = get_enterprise_entity_by_enterpriseId(enterprise_id_of_same_block)
-            if match_tow_Enterprise(unaliased_enterprise,to_match_enterprise_in_same_block):#如果两个企业对齐成功
-                if to_match_enterprise_in_same_block.aliased == 0:#该企业也没有被匹配过
-                    alias_id_list.append(to_match_enterprise_in_same_block.id)
-                else:#被匹配过了
-                    push_enterprise_list_into_alisa_table(alias_id_list,to_match_enterprise_in_same_block.id)
-                    find_alias_id = True
-                    break
-        if not find_alias_id:#如果匹配完整个分块，都没有已经被对齐过的企业，就把对齐id_list中的企业对齐到一个新的对齐区中
-            push_enterprise_list_into_alisa_table_new_alias(alias_id_list)
+        machine_match_enterprise_by_id(unaliased_enterprise_id)
+
+def machine_match_enterprise_by_id(enterprise_id):
+    """
+    对具体某个还没机器对齐的企业，进行机器对齐
+    :param enterprise_id: 企业id
+    :return:
+    """
+    enterprise = get_enterprise_entity_by_enterpriseId(enterprise_id)
+    # 加一个判断，有可能循环后期有的机构已经被对齐了
+    if enterprise.aliased == 1: return
+    # 获取与该机构同分块的机构id列表
+    enterprise_id_list_of_same_block = get_id_list_of_same_block(enterprise)
+    alias_id_list = []  # 用于存放对齐的企业id
+    alias_id_list.append(enterprise.id)
+    find_alias_id = False  # 标识匹配完后是否需要建立新的对齐区
+    # 对该待对齐机构和其分块中的机构逐一进行匹配
+    for enterprise_id_of_same_block in enterprise_id_list_of_same_block:
+        to_match_enterprise_in_same_block = get_enterprise_entity_by_enterpriseId(enterprise_id_of_same_block)
+        if match_tow_Enterprise(enterprise, to_match_enterprise_in_same_block):  # 如果两个企业对齐成功
+            if to_match_enterprise_in_same_block.aliased == 0:  # 该企业也没有被匹配过
+                alias_id_list.append(to_match_enterprise_in_same_block.id)
+            else:  # 被匹配过了
+                push_enterprise_list_into_alisa_table(alias_id_list, to_match_enterprise_in_same_block.id)
+                find_alias_id = True
+                break
+    if not find_alias_id:  # 如果匹配完整个分块，都没有已经被对齐过的企业，就把对齐id_list中的企业对齐到一个新的对齐区中
+        push_enterprise_list_into_alisa_table_new_alias(alias_id_list)
 
 def unset_all_enterprise():
     """
@@ -164,6 +170,24 @@ def unset_all_enterprise():
         mssql.ExecNonQuery("update EnterpriseInfo Set aliased = 0 WHERE id = %d"%id)
     mssql.ExecNonQuery("delete from aliasCompany WHERE 1=1")
 
+def get_id_list_of_same_aliasid_by_enterprise_id(enterprise_id):
+    """
+    获得指定企业的同对齐块的机构id列表
+    :param enterprise_id:
+    :return:
+    """
+    result = mssql.ExecQuery("select aliasid from aliasCompany where companyid = %d" % enterprise_id)
+    id_list = []
+    if len(result) == 0: return id_list
+    aliasid = result[0][0]
+    result_list = mssql.ExecQuery("select companyid from aliasCompany where aliasid = %d" % aliasid)
+    aliasid_set = set()
+    for result in result_list:
+        #if (result[0] != enterprise_id):
+            aliasid_set.add(result[0])
+    id_list = list(aliasid_set)
+    return id_list
+
 def present_all_aliasname(enterprise_id):
     """
     查找该企业的别名企业,如果该企业对齐过了，取对齐表中找所在对齐块的所有别名企业id,
@@ -171,16 +195,15 @@ def present_all_aliasname(enterprise_id):
     :param enterprise_id:企业id
     :return:别名企业id列表
     """
-    result = mssql.ExecQuery("select aliasid from aliasCompany where companyid = %d"%enterprise_id)
-    id_list = []
-    if len(result) == 0:return id_list
-    aliasid = result[0][0]
-    result_list = mssql.ExecQuery("select companyid from aliasCompany where aliasid = %d" % aliasid)
-    aliasid_set = set()
-    for result in result_list:
-        if(result[0]!=enterprise_id):
-            aliasid_set.add(result[0])
-    id_list = list(aliasid_set)
+    # 判断该机构是否已经被对齐
+    is_aliased = is_aliased_by_enterprise_id(enterprise_id)
+    # 如果对齐了，返回同对齐块的机构
+    if is_aliased :
+        id_list = get_id_list_of_same_aliasid_by_enterprise_id(enterprise_id)
+    # 如果没对齐，调用对齐某机构函数，对该机构进行对齐,再返回
+    else:
+        machine_match_enterprise_by_id(enterprise_id)
+        id_list = get_id_list_of_same_aliasid_by_enterprise_id(enterprise_id)
     #return id_list
 
     ####################多余，可重构
@@ -213,5 +236,30 @@ def is_aliased_by_enterprise_id(id):
     if len(result) == 0 or result[0][0]==0:return False
     return True
 
+def has_been_manmade(id_list):
+    for id in id_list:
+        result = mssql.ExecQuery("select manmade from EnterpriseInfo where id = %d"%id)
+        if len(result)>0 and result[0][0]==1:return True
+    return False
+
+def insert_into_manmade_table(names):
+    """
+    将names里的别名企业插入到人工对齐表中
+    :param names: 空格连接的(如果机构名中出现空格会出问题)
+    :return:
+    """
+    nameList = names.strip().split(" ")
+    id_list = []
+    for name in nameList:
+        id_list.append(get_enterprise_id_by_name(name))
+    if has_been_manmade(id_list):
+        return
+    else:
+        aliasid = get_new_aliasid("ManMadeAliasEnterprise")
+        nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        for id in id_list:
+            mssql.ExecNonQuery("insert into ManMadeAliasEnterprise VALUES (%d,%d,'%s')"%(id,aliasid,nowTime))
+            mssql.ExecNonQuery("update EnterpriseInfo set manmade = 1 where id = %d" % id)
 
 
+#insert_into_manmade_table(" 华润新能源（阳江）风能有限公司 华润电力风能（阳江）有限公司")

@@ -16,7 +16,7 @@
           //如果实例化成功,就调用open()方法,就开始准备向服务器发送请求
           if (xmlHttpReg != null) {
               var p = document.getElementById("name").value
-              xmlHttpReg.open("get", "/present_alias_enterprise?name="+p,true)
+              xmlHttpReg.open("get", "/present_alias_enterprise_by_name?name="+p,true)
               alert(p)
               xmlHttpReg.send(null)
               xmlHttpReg.onreadystatechange = doResult; //设置回调函数
@@ -28,8 +28,16 @@
               if (xmlHttpReg.readyState == 4) {//4代表执行完成
                   if (xmlHttpReg.status == 200) {//200代表执行成功
                       //将xmlHttpReg.responseText的值赋给ID为resText的元素
-                      alert("aaa")
-                      document.getElementById("resText").innerHTML = xmlHttpReg.responseText;
+                      //document.getElementById("resText").innerHTML = xmlHttpReg.responseText;
+                      var nameList = xmlHttpReg.responseText.split("</br>")
+                      var res = "<table>"
+                      for (var i=0;i < nameList.length-1;i++){
+                            res = res+"<tr><td><input type=\"checkbox\" name=\"ckb\" value=\""+nameList[i]+"\"/>"+nameList[i]+"</td> </tr>"
+                      }
+                      res = res + "</table>"
+                      res = res + "<form><input type=\"button\" value=\"提交\"  onclick=\"sut();\"/></form>"
+                      document.getElementById("resText").innerHTML = res
+
                   }
               }
 
@@ -37,6 +45,65 @@
 
 
       }
+      function match() {
+          //先声明一个异步请求对象
+          var xmlHttpReg = null;
+          if (window.ActiveXObject) {//如果是IE
+              xmlHttpReg = new ActiveXObject("Microsoft.XMLHTTP");
+          } else if (window.XMLHttpRequest) {
+              xmlHttpReg = new XMLHttpRequest(); //实例化一个xmlHttpReg
+          }
+          //如果实例化成功,就调用open()方法,就开始准备向服务器发送请求
+          if (xmlHttpReg != null) {
+              xmlHttpReg.open("get", "/match_enterprise",true)
+              alert("开始匹配")
+              xmlHttpReg.send(null)
+              xmlHttpReg.onreadystatechange = doResult; //设置回调函数
+          }
+          //回调函数
+          //一旦readyState的值改变,将会调用这个函数,readyState=4表示完成相应
+          //设定函数doResult()
+          function doResult() {
+              if (xmlHttpReg.readyState == 4) {//4代表执行完成
+                  if (xmlHttpReg.status == 200) {//200代表执行成功
+                      //将xmlHttpReg.responseText的值赋给ID为resText的元素
+                      alert("匹配完成")
+                  }
+              }
+
+          }
+
+
+      }
+      function sut() {
+        var nameList = ""
+        var a = document.getElementsByName("ckb");
+        for ( var i = 0; i < a.length; i++) {
+            a.type = "hidden"
+            if (a[i].checked) {
+                nameList = nameList + " " +a[i].value
+            }
+        }
+        var xmlHttpReg = null;
+          if (window.ActiveXObject) {//如果是IE
+              xmlHttpReg = new ActiveXObject("Microsoft.XMLHTTP");
+          } else if (window.XMLHttpRequest) {
+              xmlHttpReg = new XMLHttpRequest(); //实例化一个xmlHttpReg
+          }
+          //如果实例化成功,就调用open()方法,就开始准备向服务器发送请求
+          if (xmlHttpReg != null) {
+              xmlHttpReg.open("get", "/insert_into_manmade?names="+nameList,true)
+              xmlHttpReg.send(null)
+              xmlHttpReg.onreadystatechange = doResult; //设置回调函数
+          }
+          function doResult() {
+              if (xmlHttpReg.readyState == 4) {//4代表执行完成
+                  if (xmlHttpReg.status == 200) {//200代表执行成功
+                      document.getElementById("resText").innerHTML =  xmlHttpReg.responseText
+                  }
+              }
+    }
+    }
 {#        window.onload = function(){#}
 {#          var url = "/test"#}
 {#          var request = new XMLHttpRequest()#}
@@ -60,11 +127,13 @@
 </head>
 <body>
 
-      <div id="resText"></div>
+      <div id="resText">
       <form method=get action="">
           <input type="text" name="enterprisename" id="name">
           <input type="button" value="查询"  onclick="ajax();"/>
+          <input type="button" value="匹配"  onclick="match();"/>
       </form>
+      </div>
 
 </body>
 </html>
